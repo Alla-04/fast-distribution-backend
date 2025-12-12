@@ -52,6 +52,8 @@ app.post("/twilio-send", async (req, res) => {
 });
 
 // START THE SERVER
-app.listen(5001, () => {
-    console.log("🚀 Twilio SMS backend running at http://localhost:5001");
+const PORT = process.env.PORT || 5001;
+
+app.listen(PORT, () => {
+    console.log(`Twilio SMS backend running on port ${PORT}`);
 });
