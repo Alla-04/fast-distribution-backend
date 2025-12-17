@@ -1,7 +1,9 @@
-import express from "express"; // Web server framework for handling routes
-import cors from "cors";       // Allows frontend pages to access this backend
-import dotenv from "dotenv";   // Loads environment variables from .env file
-import twilio from "twilio";   // Twilio library used to send SMS messages
+import express from "express";  // Web server framework for handling routes
+import cors from "cors";        // Allows frontend pages to access this backend
+import dotenv from "dotenv";    // Loads environment variables from .env file
+import twilio from "twilio";    // Twilio library used to send SMS messages
+import fetch from "node-fetch"; // Used to verify reCAPTCHA with Google
+
 
 dotenv.config(); // Load environment variables
 
@@ -16,18 +18,42 @@ const client = twilio(
 );
 
 // SEND SMS
-// Frontend sends: { phoneList: [...], message: "text" }
+// Frontend sends: { phoneList: [...], message: "text", captchaToken }
 // Backend loops through numbers and sends SMS one by one
 app.post("/twilio-send", async (req, res) => {
-    const { phoneList, message } = req.body;
+    const { phoneList, message, captchaToken } = req.body;
 
     // Validate that both fields exist
-    if (!phoneList || !message) {
+    if (!phoneList || !message || !captchaToken) {
         return res.status(400).json({ success: false, message: "Missing fields" });
     }
 
     try {
-        const results = []; // Store Twilio message SIDs (IDs for each SMS sent)
+        // Verify the reCAPTCHA token with Google to ensure the request is made by a human
+        const captchaResponse = await fetch(
+            "https://www.google.com/recaptcha/api/siteverify",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    secret: process.env.RECAPTCHA_SECRET_KEY, 
+                    response: captchaToken // Token received from the frontend reCAPTCHA widget
+                })
+            }
+        );
+
+        // Parse Google's verification response
+        const captchaData = await captchaResponse.json();
+
+        // Stop processing if the reCAPTCHA verification fails
+        if (!captchaData.success) {
+            return res.status(403).json({
+                success: false,
+                message: "reCAPTCHA verification failed"
+            });
+        }
+
+        const results = []; // If reCAPTCHA verification is successful store Twilio message SIDs (IDs for each SMS sent)
 
          // Loop through every phone number sent from frontend
         for (const num of phoneList) {
